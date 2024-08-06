@@ -88,10 +88,3 @@ pip install -r requirements.txt
     python src/run_cilia_detection.py
     python src/join_nuclei_and_cilia_results.py
     ```
-
-
-
-## Authors
-
-Nuclei segmentation: [Andrei Boiarov](mailto:andrei.boiarov@constructor.tech) \
-Cilia detection: [Kseniia Alekseitseva](mailto:kseniia.alekseitseva@constructor.tech)
