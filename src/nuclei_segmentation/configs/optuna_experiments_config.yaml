@@ -1,0 +1,5 @@
+optuna_trials: 20
+
+not_treated_exp: False
+on_test: False
+few_shot: True

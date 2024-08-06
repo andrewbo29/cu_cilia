@@ -1,0 +1,27 @@
+# common dependencies
+ipykernel
+jupyter
+ipywidgets
+numpy==1.23.5
+dvc[gs]>=3.16.0
+pandas[excel]
+matplotlib
+tqdm
+fire
+protobuf<=3.20.1
+nvitop
+python-dotenv
+
+# nuclei segmentation dependencies
+cellpose==2.2.2
+wandb
+optuna>=1.4.0
+plotly 
+mlflow
+
+# cilia detection dependencies
+opencv-python
+pillow
+astropy
+scikit-image
+fil_finder

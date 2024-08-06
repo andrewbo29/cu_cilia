@@ -1,0 +1,9 @@
+not_treated_exp: False
+n_support: 5
+tries_num: 50
+
+n_epochs: 70
+nimg_per_epoch: 20
+learning_rate: 0.0397
+weight_decay: 0.00001254
+batch_size: 8

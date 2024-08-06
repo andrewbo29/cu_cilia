@@ -1,0 +1,8 @@
+not_treated_exp: True
+n_support: -1
+
+n_epochs: 30
+nimg_per_epoch: 45
+learning_rate: 0.05358
+weight_decay: 0.001215
+batch_size: 4
