@@ -3,7 +3,7 @@
 
 ## Running on Constructor Platform (CP)
 
-1. Inside the `data/Original` folder, create a new folder and upload your images there. **Only `tiff` and `tif` image formats are supported**. You can also upload images within a nested folder structure if necessary.
+1. Inside the `data` folder, create a new folder and upload your images there. **Only `tiff` and `tif` image formats are supported**. You can also upload images within a nested folder structure if necessary.
 
     ![Alt text](images/image-1.png)
 

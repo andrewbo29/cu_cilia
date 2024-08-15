@@ -3,7 +3,6 @@ ipykernel
 jupyter
 ipywidgets
 numpy==1.23.5
-dvc[gs]>=3.16.0
 pandas[excel]
 matplotlib
 tqdm
