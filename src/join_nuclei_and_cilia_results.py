@@ -1,3 +1,4 @@
+from concurrent.futures import ProcessPoolExecutor, as_completed
 from collections import defaultdict
 import cv2
 from dotenv import load_dotenv
@@ -33,8 +34,93 @@ def get_label_img(coords, img_shape):
 
 def find_boundary_coords(label_img):
     boundary = find_boundaries(label_img, mode="inner")
-    boundary_y, boundary_x = np.where(boundary)
-    return boundary_y, boundary_x
+    return np.where(boundary)
+
+
+def process_image(data, img_stem, bgr, cilia_results_dir, h, w, Rx, Ry):
+    img_data = data[img_stem]
+    nuclei_data = pd.DataFrame.from_dict(img_data, orient="index")
+    nuclei_data["cm_yx"] = nuclei_data["center_mass"].apply(lambda coords: [coords[0] * Ry, coords[1] * Rx])
+
+    bbox_path = cilia_results_dir / f"bboxes/{img_stem}.txt"
+    with open(bbox_path, "r") as f:
+        cilias = f.readlines()
+
+    if len(cilias) == 0:
+        return None
+
+    cilias_yx = {i: (i, [float(coord) for coord in cilia.strip().split(" ")[1:3]][::-1]) for i, cilia in enumerate(cilias)}
+    cilias_data = pd.DataFrame.from_dict(cilias_yx).T.drop(columns=0)
+    cilias_data.columns = ["cm_yx"]
+    cilias_data["image_name"] = img_stem
+    cilias_data["label"] = cilias_data.index + 1
+    cilias_data = cilias_data.set_index("label")
+
+    label_img = cv2.imread((cilia_results_dir / f"labels/{img_stem}.png").as_posix(), cv2.IMREAD_UNCHANGED)
+    cilias_array = np.array(cilias_data["cm_yx"].tolist(), dtype=float)
+    nuclei_array = np.array(nuclei_data["cm_yx"].tolist(), dtype=float)
+
+    cm_distances = cdist(cilias_array, nuclei_array)
+    argmins = cm_distances.argmin(axis=1)
+    mins = cm_distances.min(axis=1)
+    cilias_data["nearest_cm_"] = argmins + 1
+    cilias_data["nearest_cm_dist"] = mins
+    cilias_data["nearest_cm_coord"] = nuclei_data["cm_yx"].iloc[argmins].tolist()
+
+    intersections = np.empty((len(nuclei_data), len(cilias_data)), dtype=object)
+    min_bound_dis = np.empty((len(nuclei_data), len(cilias_data)), dtype=float)
+    min_bound_coord = np.empty((len(nuclei_data), len(cilias_data)), dtype=object)
+
+    for i, nuclei_row in enumerate(nuclei_data.itertuples()):
+        nuclei_label = get_label_img(nuclei_row.coords, (h, w))
+        boundary_y, boundary_x = find_boundary_coords(nuclei_label)
+        boundary_yx = list(zip(boundary_y, boundary_x))
+
+        for j, cilia_row in enumerate(cilias_data.itertuples()):
+            cilia_label = (label_img == cilia_row.Index)
+            bound_distances = cdist(np.array(cilia_row.cm_yx).reshape(1, -1), boundary_yx)
+            min_bound_dis[i, j] = bound_distances.min()
+            min_bound_coord[i, j] = boundary_yx[bound_distances.argmin()]
+            intersections[i, j] = np.logical_and(cilia_label, nuclei_label).any()
+
+    cilias_data["nearest_bound_cell"] = np.argmin(min_bound_dis, axis=0)
+    cilias_data["nearest_bound_dist"] = min_bound_dis[cilias_data["nearest_bound_cell"]].diagonal()
+    cilias_data["nearest_bound_coord"] = min_bound_coord[cilias_data["nearest_bound_cell"]].diagonal()
+    nuclei, cilias = np.where(intersections)
+    cilias_data["intersection_with_cell"] = {
+        element+1: nuclei[cilias == element].tolist()
+        if len(nuclei[cilias == element]) != 0 else False
+        for element in range(len(cilias_data))
+    }
+
+    df = pd.read_csv(cilia_results_dir / f"features/{img_stem}.csv")
+    filepath = cilia_results_dir / f"features_combined/{img_stem}.csv"
+    filepath.parent.mkdir(exist_ok=True, parents=True)
+
+    combined_df = pd.merge(df, cilias_data, how="inner", on=["image_name", "label"])
+    combined_df.to_csv(filepath, index=False)
+
+    img_cilia_data = {
+        "image_name": img_stem,
+        "cilias_number": len(combined_df),
+        "in_cells_perc": (combined_df["intersection_with_cell"] != False).sum() / len(combined_df) * 100,
+        "mean_nearest_cm_dist": combined_df["nearest_cm_dist"].mean(),
+        "mean_nearest_bound_dist": combined_df["nearest_bound_dist"].mean(),
+    }
+
+    overlay = bgr.copy()
+    for row in cilias_data.itertuples():
+        cm_yx = [int(float(i)) for i in row.cm_yx]
+        nearest_cm_coord = [int(float(i)) for i in row.nearest_cm_coord]
+        nearest_bound_coord = [int(float(i)) for i in row.nearest_bound_coord]
+
+        overlay = cv2.line(overlay, cm_yx[::-1], nearest_cm_coord[::-1], (255, 255, 255), thickness=6)
+        overlay = cv2.line(overlay, cm_yx[::-1], nearest_bound_coord[::-1], (0, 255, 0), thickness=6)
+
+    bgr = cv2.addWeighted(overlay, 0.3, overlay, 0.7, 0)
+    cv2.imwrite((cilia_results_dir / f"distances/{img_stem}.png").as_posix(), bgr)
+
+    return img_cilia_data
 
 
 def main():
@@ -44,117 +130,26 @@ def main():
     nuclei_results_dir = output_dir / "nuclei_results"
     df_nuclei = pd.read_csv(nuclei_results_dir / "image_nuclei_features.csv")
     logger.info("Joining results of cilia and nuclei detection")
+
     with open(nuclei_results_dir / "nuclei_features.pkl", "rb") as f:
         data = pickle.load(f)
-    img_cilia_data = list()
-    for img_stem, img_data in data.items():
-        logger.debug(img_stem)
-        img_data = data[img_stem]
-        img_path = list(images_dir.rglob(f"{img_stem}*"))[0]
 
-        bgr = cv2.imread(img_path.as_posix())
-        h, w = bgr.shape[:2]
-        old_h, old_w = 512, 512
-        Rx = w / old_w
-        Ry = h / old_h
-        nuclei_data = pd.DataFrame.from_dict(img_data, orient="index")
-        nuclei_data["cm_yx"] = nuclei_data["center_mass"].apply(
-            lambda coords: [coords[0] * Ry, coords[1] * Rx]
-        )
-        bbox_path = cilia_results_dir / f"bboxes/{img_stem}.txt"
-        with open(bbox_path, "r") as f:
-            cilias = f.readlines()
-        if len(cilias) == 0:
-            cilias_data = pd.DataFrame(columns=["image_name", "label"])
-        else:
-            cilias_yx = {
-                i: (i, [float(coord) for coord in cilia.strip().split(" ")[1:3]][::-1])
-                for i, cilia in enumerate(cilias)
-            }
-            cilias_data = pd.DataFrame.from_dict(cilias_yx).T.drop(columns=0)
-            cilias_data.columns = ["cm_yx"]
-            cilias_data["image_name"] = img_stem
-            cilias_data["label"] = cilias_data.index + 1
-            cilias_data = cilias_data.set_index("label")
-            label_img = cv2.imread(
-                (cilia_results_dir / f"labels/{img_stem}.png").as_posix(),
-                cv2.IMREAD_UNCHANGED,
-            )
-            cilias_array = np.array(cilias_data["cm_yx"].tolist(), dtype=float)
-            nuclei_array = np.array(nuclei_data["cm_yx"].tolist(), dtype=float)
+    img_cilia_data = []
+    with ProcessPoolExecutor() as executor:
+        futures = []
+        for img_stem in data.keys():
+            img_path = list(images_dir.rglob(f"{img_stem}*"))[0]
+            bgr = cv2.imread(img_path.as_posix())
+            h, w = bgr.shape[:2]
+            old_h, old_w = 512, 512
+            Rx = w / old_w
+            Ry = h / old_h
+            futures.append(executor.submit(process_image, data, img_stem, bgr, cilia_results_dir, h, w, Rx, Ry))
 
-            logger.debug("Calculating center mass distances...")
-            cm_distances = cdist(cilias_array, nuclei_array)
-            argmins = cm_distances.argmin(axis=1)
-            mins = cm_distances.min(axis=1)
-            cilias_data["nearest_cm_"] = argmins + 1
-            cilias_data["nearest_cm_dist"] = mins
-            cilias_data["nearest_cm_coord"] = nuclei_data["cm_yx"].iloc[argmins].tolist()
-            intersections = np.empty((len(nuclei_data), len(cilias_data)), dtype=object)
-            min_bound_dis = np.empty((len(nuclei_data), len(cilias_data)), dtype=float)
-            min_bound_coord = np.empty((len(nuclei_data), len(cilias_data)), dtype=object)
-
-            logger.debug("Calculating boundary distances...")
-            for i, nuclei_row in enumerate(nuclei_data.itertuples()):
-                nuclei_label = get_label_img(nuclei_row.coords, (h, w))
-                boundary_y, boundary_x = find_boundary_coords(nuclei_label)
-                bgr[(boundary_y, boundary_x)] = (255, 255, 255)
-                boundary_yx = list(zip(boundary_y, boundary_x))
-
-                for j, cilia_row in enumerate(cilias_data.itertuples()):
-                    cilia_label = (label_img == cilia_row.Index)
-                    bound_distances = cdist(np.array(cilia_row.cm_yx).reshape(1, -1), boundary_yx)
-                    min_bound_dis[i, j] = bound_distances.min()
-                    min_bound_coord[i, j] = boundary_yx[bound_distances.argmin()]
-                    intersections[i, j] = np.logical_and(cilia_label, nuclei_label).any()
-            cilias_data["nearest_bound_cell"] = np.argmin(min_bound_dis, axis=0)
-            cilias_data["nearest_bound_dist"] = min_bound_dis[cilias_data["nearest_bound_cell"]].diagonal()
-            cilias_data["nearest_bound_coord"] = min_bound_coord[cilias_data["nearest_bound_cell"]].diagonal()
-            nuclei, cilias = np.where(intersections)
-            cilias_data["intersection_with_cell"] = {
-                element+1: nuclei[cilias == element].tolist()
-                if len(nuclei[cilias == element]) != 0 else False
-                for element in range(len(cilias_data))
-            }
-        logger.debug("Saving features")
-        df = pd.read_csv(cilia_results_dir / f"features/{img_stem}.csv")
-        filepath = cilia_results_dir / f"features_combined/{img_stem}.csv"
-        filepath.parent.mkdir(exist_ok=True, parents=True)
-
-        combined_df = pd.merge(df, cilias_data, how="inner", on=["image_name", "label"])
-        combined_df.to_csv(filepath, index=False)
-
-        if set(["nearest_cm_dist", "nearest_bound_dist", "intersection_with_cell"]).issubset(set(combined_df.columns)):
-            img_cilia_data.append({
-                "image_name": img_stem,
-                "cilias_number": len(combined_df),
-                "in_cells_perc": (combined_df["intersection_with_cell"] != "False").sum() / len(combined_df) * 100,
-                "mean_nearest_cm_dist": combined_df["nearest_cm_dist"].mean(),
-                "mean_nearest_bound_dist": combined_df["nearest_bound_dist"].mean(),
-            })
-        else:
-            img_cilia_data.append({
-                "image_name": img_stem,
-                "cilias_number": 0,
-                "in_cells_perc": np.nan,
-                "mean_nearest_cm_dist": np.nan,
-                "mean_nearest_bound_dist": np.nan,
-            })
-
-        logger.debug("Saving images")
-        overlay = bgr.copy()
-        for row in cilias_data.itertuples():
-            cm_yx = [int(float(i)) for i in row.cm_yx]
-            nearest_cm_coord = [int(float(i)) for i in row.nearest_cm_coord]
-            nearest_bound_coord = [int(float(i)) for i in row.nearest_bound_coord]
-
-            overlay = cv2.line(overlay, cm_yx[::-1], nearest_cm_coord[::-1], (255, 255, 255), thickness=6)
-            overlay = cv2.line(overlay, cm_yx[::-1], nearest_bound_coord[::-1], (0, 255, 0), thickness=6)
-
-        bgr = cv2.addWeighted(overlay, 0.3, bgr, 0.7, 0)
-        filepath = cilia_results_dir / f"distances/{img_stem}.png"
-        filepath.parent.mkdir(exist_ok=True, parents=True)
-        cv2.imwrite(filepath.as_posix(), bgr)
+        for future in as_completed(futures):
+            result = future.result()
+            if result:
+                img_cilia_data.append(result)
 
     logger.info("Saving results")
     df_aggregated_cilias = pd.DataFrame(

@@ -24,8 +24,6 @@ def _check_directory(path: Path):
         logger.error(f"Path is not a directory: '{path}'")
         raise RuntimeError(f"Path is not a directory: '{path}'")
 
-    return len(list(path.iterdir()))
-
 
 def main():
     images_dir = Path(os.environ.get("IMAGES_DIR"))
@@ -33,7 +31,6 @@ def main():
     logger.info(f"Processing data in {images_dir}")
     try:
         n_files = _check_directory(images_dir)
-        logger.info(f"Found {n_files} images to process")
         logger.info(f"Saving results to {output_dir}")
         run_cilia_detection()
         run_nuclei_segmentation()

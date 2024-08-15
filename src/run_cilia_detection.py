@@ -1,3 +1,4 @@
+from concurrent.futures import ProcessPoolExecutor, as_completed
 from dotenv import load_dotenv
 import json
 import logging
@@ -18,6 +19,24 @@ load_dotenv("env.txt")
 logger = logging.getLogger("cilia detection")
 
 
+def process_single_image(img_p, detector, columns_to_save):
+    logger.debug(img_p.name)
+    rg, label_img, props = detector.process_image(img_p, True)
+    detector.save_labeled_images(img_p, label_img)
+    detector.save_bboxes(img_p, props)
+    if np.sum(rg) == 0:
+        return None
+    visualizations = []
+    for col in columns_to_save:
+        if col == "image_name":
+            continue
+        try:
+            visualizations.append(detector.visualize_feature(img_p, label_img, props, visualize_name=col))
+        except AttributeError:
+            continue
+    return visualizations
+
+
 def main():
     images_dir = Path(os.environ.get("IMAGES_DIR"))
     output_dir = Path(os.environ.get("OUTPUT_DIR")) / "cilia_results"
@@ -33,20 +52,13 @@ def main():
     logger.info(f"Total number of images to process: {len(images)}")
     detector = CiliaDetector(output_dir, columns_to_save)
     logger.info(f"Running cilia detection algorithm")
-    for img_p in tqdm(images):
-        logger.debug(img_p.name)
-        rg, label_img, props = detector.process_image(img_p, True)
-        detector.save_labeled_images(img_p, label_img)
-        detector.save_bboxes(img_p, props)
-        if np.sum(rg) == 0:
-            continue
-        for col in columns_to_save:
-            if col == "image_name":
-                continue
-            try:
-                detector.visualize_feature(img_p, label_img, props, visualize_name=col)
-            except AttributeError:
-                continue
+    
+    # process images in parallel
+    with ProcessPoolExecutor() as executor:
+        futures = [executor.submit(process_single_image, img_p, detector, columns_to_save) for img_p in images]
+        for future in as_completed(futures):
+            _ = future.result()
+
     # aggregate features for all cilia detected
     dfs = []
     for csv_p in (output_dir / "features").glob("*.csv"):
