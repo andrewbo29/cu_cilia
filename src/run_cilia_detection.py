@@ -19,22 +19,28 @@ load_dotenv("env.txt")
 logger = logging.getLogger("cilia detection")
 
 
-def process_single_image(img_p, detector, columns_to_save):
-    logger.debug(img_p.name)
-    rg, label_img, props = detector.process_image(img_p, True)
-    detector.save_labeled_images(img_p, label_img)
-    detector.save_bboxes(img_p, props)
-    if np.sum(rg) == 0:
+def process_single_image(img_p, columns_to_save, output_dir):
+    logger = logging.getLogger(f"Process-{os.getpid()}")
+    try:
+        logger.debug(img_p.name)
+        detector = CiliaDetector(output_dir, columns_to_save)
+        rg, label_img, props = detector.process_image(img_p, True)
+        detector.save_labeled_images(img_p, label_img)
+        detector.save_bboxes(img_p, props)
+        if np.sum(rg) == 0:
+            return None
+        visualizations = []
+        for col in columns_to_save:
+            if col == "image_name":
+                continue
+            try:
+                detector.visualize_feature(img_p, label_img, props, visualize_name=col)
+            except AttributeError:
+                continue
+        return props  # Return the DataFrame instead of visualizations
+    except Exception as e:
+        logger.error(f"Error processing {img_p.name}: {e}")
         return None
-    visualizations = []
-    for col in columns_to_save:
-        if col == "image_name":
-            continue
-        try:
-            visualizations.append(detector.visualize_feature(img_p, label_img, props, visualize_name=col))
-        except AttributeError:
-            continue
-    return visualizations
 
 
 def main():
@@ -50,23 +56,25 @@ def main():
     columns_to_save = ["image_name", "label"] + vis_features
     images = sorted(list(images_dir.rglob("*.tiff")) + list(images_dir.rglob("*.tif")))
     logger.info(f"Total number of images to process: {len(images)}")
-    detector = CiliaDetector(output_dir, columns_to_save)
     logger.info(f"Running cilia detection algorithm")
     
     # process images in parallel
+    results = []
     with ProcessPoolExecutor() as executor:
-        futures = [executor.submit(process_single_image, img_p, detector, columns_to_save) for img_p in images]
-        for future in as_completed(futures):
-            _ = future.result()
+        futures = [
+            executor.submit(process_single_image, img_p, columns_to_save, output_dir)
+            for img_p in images
+        ]
+        for future in tqdm(as_completed(futures), total=len(futures)):
+            props = future.result()
+            if props is not None:
+                results.append(props[columns_to_save])
 
     # aggregate features for all cilia detected
-    dfs = []
-    for csv_p in (output_dir / "features").glob("*.csv"):
-        df = pd.read_csv(csv_p)
-        dfs.append(df)
-    if len(dfs) == 0:
+    if not results:
         return
-    combined_csv = pd.concat(dfs, ignore_index=True)
+    combined_csv = pd.concat(results, ignore_index=True)
+
     dtype_changes = {'label': int, 'area': float}
     for column, dtype in dtype_changes.items():
         if column in combined_csv.columns:
