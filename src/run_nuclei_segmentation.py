@@ -85,7 +85,7 @@ def main():
     output_dir = Path(os.environ.get("OUTPUT_DIR")) / "nuclei_results"
     if output_dir.exists():
         shutil.rmtree(output_dir)
-    output_dir.mkdir(parents=True)
+    output_dir.mkdir(exist_ok=True, parents=True)
 
     img_size = [512, 512]
     channels = [3, 0]
@@ -123,7 +123,7 @@ def main():
     seg_images_folder = output_dir / "nuclei"
     if seg_images_folder.exists():
         shutil.rmtree(seg_images_folder)
-    seg_images_folder.mkdir(parents=True)
+    seg_images_folder.mkdir(exist_ok=True, parents=True)
 
     for k in range(len(resized_images)):
         im = resized_images[k]
