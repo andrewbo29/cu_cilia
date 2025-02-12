@@ -12,6 +12,7 @@ from rolos_sdk import Dataframe, DataStorageInterface, DataStorageType, TableCol
 from scipy.spatial.distance import cdist
 from skimage.transform import resize
 from skimage.segmentation import find_boundaries
+from tqdm import tqdm
 
 
 load_dotenv("env.txt")
@@ -146,7 +147,7 @@ def main():
             Ry = h / old_h
             futures.append(executor.submit(process_image, data, img_stem, bgr, cilia_results_dir, h, w, Rx, Ry))
 
-        for future in as_completed(futures):
+        for future in tqdm(as_completed(futures), total=len(futures)):
             result = future.result()
             if result:
                 img_cilia_data.append(result)
