@@ -91,9 +91,10 @@ class ImageAnalyzer:
         data.columns = [col.replace('-', '_') for col in data.columns]
         data = self.filter(data, original_img.shape)
         label_img, data = self.postprocess(data, label_img)
-        data['skeleton_length'] = self.calculate_skeleton_length(data)
-        data['area'] = self.calculate_true_area(data, original_img)
-        data['image_name'] = img_path.stem
+        if len(data) > 1:
+            data['skeleton_length'] = self.calculate_skeleton_length(data)
+            data['area'] = self.calculate_true_area(data, original_img)
+            data['image_name'] = img_path.stem
 
         return label_img, data.round(2)
 
