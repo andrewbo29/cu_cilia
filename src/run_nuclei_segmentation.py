@@ -1,26 +1,39 @@
-from collections import defaultdict
-import numpy as np
-import scipy
-import os
-import shutil
 import logging
-import skimage
-import matplotlib.pyplot as plt
+import os
 import pickle
-import pandas as pd
-from pathlib import Path
-from dotenv import load_dotenv
-from cellpose import models, core, utils, plot
+import shutil
 import warnings
+from collections import defaultdict
+from pathlib import Path
+from typing import Any, Dict, List, Tuple
+
+import matplotlib.pyplot as plt
+import numpy as np
+import pandas as pd
+import scipy
+import skimage
+from cellpose import core, models, plot, utils
+from dotenv import load_dotenv
+
 warnings.filterwarnings("ignore")
 
 load_dotenv("env.txt")
 logger = logging.getLogger("nuclei segmentation")
 
 
-def calculate_nuclei_features(imgs_to_resize, masks, output_dir, img_size=[512, 512]):
-    image_nuclei_data = defaultdict(list)
-    nuclei_data = defaultdict(dict)
+def calculate_nuclei_features(
+    imgs_to_resize: List[Path], masks: List[np.ndarray], output_dir: Path, img_size: Tuple[int, int] = (512, 512)
+):
+    """Calculates features of detected nuclei and saves the results.
+
+    Args:
+        imgs_to_resize: List of image paths.
+        masks: List of segmentation masks.
+        output_dir: Directory to save results.
+        img_size: Target image size (height, width).
+    """
+    image_nuclei_data: Dict[str, List[Any]] = defaultdict(list)
+    nuclei_data: Dict[str, Dict[int, Dict[str, Any]]] = defaultdict(dict)
     for idx in range(len(imgs_to_resize)):
         img_name = imgs_to_resize[idx].stem
         maski = masks[idx]
@@ -32,7 +45,7 @@ def calculate_nuclei_features(imgs_to_resize, masks, output_dir, img_size=[512, 
         for cell_count in counts[1:]:
             sum_sq += cell_count / (img_size[0] * img_size[1])
         if pred_cells == 0:
-            mean_sq = 0
+            mean_sq = 0.
         else:
             mean_sq = sum_sq / pred_cells
 
@@ -61,7 +74,17 @@ def calculate_nuclei_features(imgs_to_resize, masks, output_dir, img_size=[512, 
         pickle.dump(nuclei_data, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
 
-def make_outlines(img, mask, channels=[3, 0]):
+def make_outlines(img: np.ndarray, mask: np.ndarray, channels: List[int] = [3, 0]) -> np.ndarray:
+    """Generates an outlined image with cell masks highlighted in red.
+
+    Args:
+        img: Input image.
+        mask: Segmentation mask.
+        channels: Image channels for visualization.
+
+    Returns:
+        Image with outlined segmentation masks.
+    """
     img0 = img.copy()
 
     if img0.shape[0] < 4:
@@ -70,7 +93,7 @@ def make_outlines(img, mask, channels=[3, 0]):
         img0 = plot.image_to_rgb(img0, channels=channels)
     else:
         if img0.max() <= 50.0:
-            img0 = np.uint8(np.clip(img0*255, 0, 1))
+            img0 = np.clip(img0 * 255, 0, 1).astype(np.uint8)
 
     outlines = utils.masks_to_outlines(mask)
     outX, outY = np.nonzero(outlines)
@@ -81,6 +104,7 @@ def make_outlines(img, mask, channels=[3, 0]):
 
 
 def main():
+    """Main function to execute nuclei segmentation using Cellpose, calculate statistics, and save the results."""
     images_dir = Path(os.environ.get("IMAGES_DIR"))
     output_dir = Path(os.environ.get("OUTPUT_DIR")) / "nuclei_results"
     if output_dir.exists():
@@ -91,12 +115,16 @@ def main():
     channels = [3, 0]
 
     logger.info("Running nuclei detection model")
-    imgs_to_resize = sorted(list(images_dir.rglob("*.tiff")) + list(images_dir.rglob("*.tif")))
+    imgs_to_resize = sorted(
+        list(images_dir.rglob("*.tiff")) + list(images_dir.rglob("*.tif"))
+    )
     resized_images = []
     for img_path in imgs_to_resize:
         img = skimage.io.imread(img_path)
         if img.size == 0 or len(img.shape) < 2:
-            logger.debug(f"Skipping {img_path} due to empty image or wrong format. Using black image instead.")
+            logger.debug(
+                f"Skipping {img_path} due to empty image or wrong format. Using black image instead."
+            )
             img = np.zeros((img_size[0], img_size[1], 3))
         img_resize = skimage.transform.resize(img, img_size)
         img_resize = skimage.util.img_as_ubyte(img_resize)
@@ -108,10 +136,12 @@ def main():
     model_path = "models/cellpose_thyroid/models/cellpose_thyroid"
     model = models.CellposeModel(gpu=True, pretrained_model=model_path)
     masks = model.eval(
-        resized_images, channels=channels, diameter=model.diam_labels,
+        resized_images,
+        channels=channels,
+        diameter=model.diam_labels,
         flow_threshold=float(os.environ.get("CELLPOSE_FLOW_THRESHOLD", 0.4)),
-        cellprob_threshold=float(os.environ.get("CELLPOSE_CELLPROB_THRESHOLD", 0.)),
-        min_size=float(os.environ.get("CELLPOSE_MIN_SIZE", 15.)),
+        cellprob_threshold=float(os.environ.get("CELLPOSE_CELLPROB_THRESHOLD", 0.0)),
+        min_size=float(os.environ.get("CELLPOSE_MIN_SIZE", 15.0)),
     )[0]
     if os.environ.get("EXCLUDE_EDGE_NUCLEI", "False") == "True":
         masks = [utils.remove_edge_masks(mask) for mask in masks]
