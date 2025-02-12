@@ -762,3 +762,4 @@ FodyWeavers.xsd
 ### Custom ###
 rolos_workflow_data/
 results/
+.rolos-temp/
