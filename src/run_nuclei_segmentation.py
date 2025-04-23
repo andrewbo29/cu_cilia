@@ -17,7 +17,7 @@ from dotenv import load_dotenv
 
 warnings.filterwarnings("ignore")
 
-load_dotenv("env.txt")
+load_dotenv("env.conf")
 logger = logging.getLogger("nuclei segmentation")
 
 

@@ -17,7 +17,7 @@ warnings.filterwarnings("ignore")
 
 from cilia_detection.cilia_detector import CiliaDetector
 
-load_dotenv("env.txt")
+load_dotenv("env.conf")
 logger = logging.getLogger("cilia detection")
 
 

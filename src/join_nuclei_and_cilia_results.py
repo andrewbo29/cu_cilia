@@ -15,7 +15,7 @@ from skimage.segmentation import find_boundaries
 from skimage.transform import resize
 from tqdm import tqdm
 
-load_dotenv("env.txt")
+load_dotenv("env.conf")
 logger = logging.getLogger("postprocessing")
 
 

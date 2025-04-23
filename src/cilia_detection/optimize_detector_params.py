@@ -24,11 +24,11 @@ logger = logging.getLogger(__name__)
 def objective(trial):
     root_path = Path(__file__).parent.parent.parent.resolve()
     images_dir = root_path / 'data/cilia_dataset/expert-annotated/Input images'
-    gt_dir = root_path / 'data/cilia_dataset/outlined_and_masked/Cilia_mask'
+    gt_dir = root_path / 'data/cilia_dataset/expert-annotated/Cilia_mask'
     images = sorted(list(images_dir.rglob("*.tiff")) + list(images_dir.rglob("*.tif")))
 
     detector = CiliaDetector(
-        Path(f"/output/trial_{trial.number:06d}"),
+        Path(f"data/cilia_optimization_results/trial_{trial.number:06d}"),
         None,
         processor=ImageProcessor(
             gauss_sigma=trial.suggest_int("gauss_sigma", 1, 30),
@@ -40,14 +40,14 @@ def objective(trial):
             min_eccentricity=trial.suggest_float("min_eccentricity", 0, 1),
             min_perimeter=trial.suggest_float("min_perimeter", 1, 200),
         ),
-        cilia_color=trial.suggest_categorical("cilia_color", ["r", "g", "rg"]),
+        cilia_color=trial.suggest_categorical("cilia_color", ["r"]),
     )
 
     all_seg_metrics = []
     all_det_metrics = {}
     for img_p in tqdm(sorted(images)):
-        gt_path = gt_dir / f"{img_p.stem}_binary.png"
-        gt_mask = cv2.imread(str(gt_path), cv2.IMREAD_GRAYSCALE)
+        gt_path = gt_dir / f"{img_p.stem}_binary.npy"
+        gt_mask = np.load(gt_path).astype(np.uint8)
         gt_bboxes = mask_to_bbox(gt_mask)
 
         rg, label_img, props = detector.process_image(img_p, False)
@@ -67,7 +67,7 @@ def objective(trial):
         all_det_metrics[img_p.stem] = det_metrics
 
         detector.visualize_feature(
-            img_p, label_img, props, visualize_name="label", second_img_path=gt_path
+            img_p, label_img, props, visualize_name="label", second_img=cv2.cvtColor(gt_mask, cv2.COLOR_GRAY2RGB)
         )
 
     mean_seg_values = {
@@ -87,12 +87,17 @@ def objective(trial):
 
 
 if __name__ == "__main__":
-    mlflc = MLflowCallback(
-        tracking_uri=os.environ.get("MLFLOW_TRACKING_URI"),
-        metric_name=["f1_det", "max_seg", "min_seg"],
-    )
+    tracking_uri = os.environ.get("MLFLOW_TRACKING_URI")
+    if tracking_uri:
+        mlflc = MLflowCallback(
+            tracking_uri=tracking_url,
+            metric_name=["f1_det", "max_seg", "min_seg"],
+        )
+        callbacks = [mlflc]
+    else:
+        callbacks = []
     study = optuna.create_study(directions=["maximize", "maximize", "minimize"])
-    study.optimize(objective, timeout=86400, callbacks=[mlflc])
+    study.optimize(objective, timeout=86400, callbacks=callbacks)
 
     logger.info("Number of finished trials: {}".format(len(study.trials)))
     trial_with_highest_det_f1 = max(study.best_trials, key=lambda t: t.values[0])

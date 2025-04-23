@@ -12,7 +12,7 @@ import skimage
 from dotenv import load_dotenv
 from fil_finder import FilFinder2D
 
-load_dotenv("env.txt")
+load_dotenv("env.conf")
 logger = logging.getLogger(__name__)
 
 
@@ -366,7 +366,7 @@ class CiliaDetector:
         labeled_img: np.ndarray,
         props: pd.DataFrame,
         visualize_name: str = "label",
-        second_img_path: Optional[Path] = None,
+        second_img: Optional[np.ndarray] = None,
     ):
         """Visualizes detected features by overlaying bounding boxes and labels on the image.
 
@@ -375,7 +375,7 @@ class CiliaDetector:
             labeled_img: Labeled image containing detected features.
             props: DataFrame with extracted properties.
             visualize_name: Feature to visualize (e.g., 'label').
-            second_img_path: Optional path to a second image for side-by-side comparison.
+            second_img: Optional second image for side-by-side comparison.
         """
         img = self.loader.load_image(img_path)
         img[labeled_img != 0] = [255, 255, 255]
@@ -403,8 +403,8 @@ class CiliaDetector:
                 2,
             )
 
-        if second_img_path:
-            img2 = cv2.imread(second_img_path.as_posix()).copy()
+        if second_img is not None:
+            img2 = second_img.copy()
             white_line = np.ones((img2.shape[0], 50, 3)) * 255
             img = np.hstack((img2, white_line, img))
 

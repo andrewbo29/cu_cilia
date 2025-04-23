@@ -12,7 +12,7 @@ from run_cilia_detection import main as run_cilia_detection
 from run_nuclei_segmentation import main as run_nuclei_segmentation
 from utils import compress_directory_to_zip, setup_logging
 
-load_dotenv("env.txt")
+load_dotenv("env.conf")
 setup_logging()
 
 logger = logging.getLogger("main")
