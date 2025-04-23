@@ -7,7 +7,9 @@
 
     ![Alt text](images/image-1.png)
 
-2. In `env.txt`, change the `DIR_NAME` to the name of the folder you created (`CUCilia_Parameter_Range_Example_images` in this case):
+2. In `env.conf`, change the `DIR_NAME` to the name of the folder you created (`CUCilia_Parameter_Range_Example_images` in this case). <br>
+__Note: Due to recent changes, `env.txt` (from the screenshot) has been renamed to `env.conf`!__
+
 
     ![Alt text](images/image-2.png)
 
@@ -30,7 +32,8 @@
 
     ![Alt text](images/image-3.png)
 
-4. After the workflow is finished, you can find the results (images with detected cilia and nuclei, as well as csv-files with aggregated results) in the `rolos_workflow_data/RUN/current/data` folder in Desk files.
+4. After the workflow is finished, you can find the results (images with detected cilia and nuclei, as well as CSV files with aggregated results) in the `workflow_data/RUN/current/data` folder in your Desk files.<br>
+__Note: Due to recent changes, `rolos_workflow_data` (from the screenshot) has been renamed to `workflow_data`!__
 
     ![Alt text](images/image-4.png)
 
@@ -72,9 +75,9 @@ pip install -r requirements.txt
 
 2. Download weights for nuclei segmentation model: `dvc pull models/cellpose_thyroid`
 
-2. Change the value of `DIR_NAME` in `env.txt` to the name of the new folder within `data/Original`. If you want to process data in a different location, update the `IMAGES_DIR` accordingly. Also, set the `OUTPUT_DIR` to specify the destination folder for the results.
+2. Change the value of `DIR_NAME` in `env.conf` to the name of the new folder within `data/Original`. If you want to process data in a different location, update the `IMAGES_DIR` accordingly. Also, set the `OUTPUT_DIR` to specify the destination folder for the results.
 
-    **Important: If you're running the code locally and not on the Constructor Platform, add `RUN_LOCALLY=True` to `env.txt` (or `export RUN_LOCALLY=True` in your terminal). This ensures the system doesn't attempt to write to the data catalog on the Constructor Platform, thereby avoiding errors.**
+    **Important: If you're running the code locally and not on the Constructor Platform, add `RUN_LOCALLY=True` to `env.conf` (or `export RUN_LOCALLY=True` in your terminal). This ensures the system doesn't attempt to write to the data catalog on the Constructor Platform, thereby avoiding errors.**
 
 
 3. Run the whole pipeline:
