@@ -7,7 +7,9 @@
 
     ![Alt text](images/image-1.png)
 
-2. In `env.conf`, change the `DIR_NAME` to the name of the folder you created (`CUCilia_Parameter_Range_Example_images` in this case):
+2. In `env.conf`, change the `DIR_NAME` to the name of the folder you created (`CUCilia_Parameter_Range_Example_images` in this case). <br>
+__Note: Due to recent changes, `env.txt` (from the screenshot) has been renamed to `env.conf`!__
+
 
     ![Alt text](images/image-2.png)
 
@@ -30,7 +32,8 @@
 
     ![Alt text](images/image-3.png)
 
-4. After the workflow is finished, you can find the results (images with detected cilia and nuclei, as well as csv-files with aggregated results) in the `rolos_workflow_data/RUN/current/data` folder in Desk files.
+4. After the workflow is finished, you can find the results (images with detected cilia and nuclei, as well as CSV files with aggregated results) in the `workflow_data/RUN/current/data` folder in your Desk files.<br>
+__Note: Due to recent changes, `rolos_workflow_data` (from the screenshot) has been renamed to `workflow_data`!__
 
     ![Alt text](images/image-4.png)
 
