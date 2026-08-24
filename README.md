@@ -64,7 +64,7 @@ The project has been thoroughly tested with the following configurations:
 
 ### Installing
 ```
-git clone git@github.com:andrewbo29/cu_cilia.git
+git clone git@github.com:Constructor-tech-org/cu_cilia.git
 cd cu_cilia
 pip install -r requirements.txt
 ```
@@ -91,3 +91,7 @@ pip install -r requirements.txt
     python src/run_cilia_detection.py
     python src/join_nuclei_and_cilia_results.py
     ```
+
+## License
+
+This project is licensed under the GNU General Public License v3.0 - see the [LICENSE](LICENSE) file for details.
