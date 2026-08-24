@@ -1,3 +1,8 @@
+# Copyright (c) 2026 Constructor Technology AG
+#
+# This file is part of cu_cilia, released under the GNU General Public
+# License v3.0. See the LICENSE file for details.
+
 import json
 import logging
 import os
